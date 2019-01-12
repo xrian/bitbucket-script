@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Title</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    tr.error {
+      background-color: #ff8181 !important;
+    }
+
+    tr.success {
+      background-color: greenyellow !important;
+    }
+
+    tr.warn {
+      background-color: #ffb83d !important;
+    }
+
+    .loading-wrapper {
+      width: 100%;
+      height: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 100;
+      text-align: center;
+      background-color: #00000061;
+      display: none;
+    }
+    .operator-button-wrapper{
+      display: none
+    }
+  </style>
+</head>
+<body>
+<div class="loading-wrapper">
+  <div class="preloader-wrapper big active">
+    <div class="spinner-layer spinner-blue-only">
+      <div class="circle-clipper left">
+        <div class="circle"></div>
+      </div>
+      <div class="gap-patch">
+        <div class="circle"></div>
+      </div>
+      <div class="circle-clipper right">
+        <div class="circle"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="row">
+    <div class="main-wrapper responsive-table bordered">
+      <div class="col s12" id="form-project">
+        <div class="row">
+          <div class="input-field col s12 m6 l4">
+            <i class="material-icons prefix">account_circle</i>
+            <input placeholder="請輸入project名称" id="project" name="project" type="text" class="validate" value="PTAH">
+            <label for="project">project名</label>
+          </div>
+          <div class="input-field col s12 m6 l4">
+            <button class="waves-effect waves-light btn" type="button">搜索</button>
+          </div>
+        </div>
+      </div>
+      <form class="col s12" id="form-branch" style="display: none">
+        <div class="row">
+          <div class="input-field col s3">
+            <i class="material-icons prefix">account_circle</i>
+            <input placeholder="請輸入源分支名" id="for" name="for" type="text" class="validate" value="">
+            <label for="project">源分支名</label>
+          </div>
+          <div class="input-field col s3">
+            <button class="waves-effect waves-light btn" id="validBranch" type="button">检查分支</button>
+            <button class="waves-effect waves-light btn" id="sortButton" type="button" style="margin-left: 10px">排序
+            </button>
+          </div>
+          <div class="input-field col s3">
+            <i class="material-icons prefix">account_circle</i>
+            <input placeholder="請輸入新分支名称" id="to" name="to" type="text" class="validate" value="">
+            <label for="project">新分支名</label>
+          </div>
+          <div class="input-field col s3 operator-button-wrapper">
+            <button class="waves-effect waves-light btn" id="addBranch" type="button">新增分支
+            </button>
+            <hr/>
+            <button
+                class="waves-effect waves-light btn"
+                id="lockButton"
+                type="button"
+            >锁定已选中分支
+            </button>
+          </div>
+        </div>
+      </form>
+      <div class="row">
+        <div class="col s3" id="total">总共:0</div>
+      </div>
+      <table class="striped">
+        <thead>
+        <tr>
+          <th width="30px"></th>
+          <th width="30px"></th>
+          <th width="20%" data-field="name">仓库名</th>
+          <th width="20%" data-field="branch">分支</th>
+          <th width="15%" data-field="operate">最后更新时间</th>
+          <th data-field="remarks">说明</th>
+        </tr>
+        </thead>
+        <tbody class="table-tbody">
+
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+<script type="text/javascript" src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.22.2/moment.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.22.2/locale/zh-hk.js"></script>
+<script>
+  var QUERY_URL = '/bit-bucket/@PROJECT',
+    QUERY_BRANCH = '/bit-bucket/branch/@UUID',
+    LOCK_BRANCH = '/bit-bucket/branch/@UUID/lock';
+  var repoList = [
+    ''
+  ];
+
+  $(function () {
+    $('#form-project').on('click', 'button', function () {
+      getData();
+    });
+    $('#validBranch').on('click', function () {
+      var forBranch = $('#for').val();
+      // 获取到全部选择的select,判断是否有该分支
+      $('input[type="checkbox"]').each(function (index, item) {
+        var _item = $(item);
+        if (_item.prop('checked')) {
+          var id = _item.attr('data-id');
+          var _that = $('select[name="select-' + id + '"]');
+          var parent = _that.parents('tr');
+          var value = _that.find('option[data-name="' + forBranch + '"]').attr('value');
+          if (value) {
+            _that.find('option[data-name="' + forBranch + '"]').prop('selected', true);
+            _that.formSelect();
+            var lastTime = _that.find('option[data-name="' + forBranch + '"]').attr('data-last');
+            parent.find('.last-time').html(moment(lastTime).calendar());
+          } else {
+            parent.addClass('warn');
+          }
+        }
+      });
+
+    });
+    // 展开事件
+    $('.table-tbody').on('click', '.etc', function (e) {
+      $(this).html('收起');
+      $(this).removeClass('etc').addClass('close');
+      var node = $(this).prev();
+      var html = node.attr('data-html');
+      node.html(html);
+    });
+    // 收起事件
+    $('.table-tbody').on('click', '.close', function (e) {
+      $(this).html('展开');
+      $(this).removeClass('close').addClass('etc');
+      var node = $(this).prev();
+      var html = node.attr('data-html').substring(0, 10);
+      node.html(html);
+    });
+    // 单选框选中事件
+    $('.table-tbody').on('change', '.checkbox', function (e) {
+      console.log('xuanzho');
+      e.preventDefault();
+      var node = $(this).find('input[type=checkbox]');
+      var id = node.attr('data-id');
+      if (node.prop('checked')) {
+        getAllBranch(id);
+      } else {
+        $(this).parent().parent().find('select[name="select-' + id + '"]').html('');
+        $('select').formSelect();
+        $(this).parents('tr').find('.last-time').html('');
+      }
+    });
+    // 下拉框选中事件
+    $('.table-tbody').on('change', 'select', function (e) {
+      var value = $(this).val();
+      var _that = $(this).find('option[value="' + value + '"]');
+      var lastTime = _that.attr('data-last');
+      var parent = $(this).parents('tr');
+      parent.find('.last-time').html(moment(lastTime).calendar());
+      parent.removeClass('warn');
+    });
+    /**
+     * 排序
+     */
+    $('#sortButton').on('click', function (e) {
+      var i = 0;
+      $('.table-tbody tr').each(function (index, item) {
+        var _this = $(item);
+        if (!_this.find('input[type=checkbox]').prop('checked')) {
+          _this.detach().appendTo('.table-tbody');
+        }
+      });
+    });
+
+    $('#addBranch').on('click', function () {
+      var to = $('#to').val();
+      if (!to) {
+        return alert('请填写新分支名称');
+      }
+      var ok = confirm('你确定要新增分支吗?');
+      if (ok) {
+        $('.loading-wrapper').show();
+        var arr = [];
+        $('.table-tbody tr').each(function (index, item) {
+          var _this = $(item);
+          if (_this.find('input[type=checkbox]').prop('checked')) {
+            var id = _this.attr('data-id');
+            var select = _this.find('select').val();
+            if (!select) {
+              alert('请选择分支(请确保已获取到分支数据)');
+              throw new Error('分支数据为null:' + id);
+            }
+            arr.push({
+              id: id,
+              branch: select,
+            });
+          }
+        });
+        var i = 0;
+        arr.forEach((item) => {
+          var url = QUERY_BRANCH.replace('@UUID', item.id);
+          $.ajax({
+            type: 'POST',
+            url: url,
+            data: {
+              name: to,
+              hash: item.branch,
+            },
+            dataType: 'json',
+            success: function (data) {
+              $('.table-tbody tr[data-id="' + item.id + '"]').addClass('success');
+              i++;
+              if (i === arr.length) {
+                alert('新增分支结束');
+                $('.loading-wrapper').hide();
+              }
+            },
+            error: function (response) {
+              console.error(response);
+              $('.table-tbody tr[data-id="' + item.id + '"]').addClass('error');
+              i++;
+              if (i === arr.length) {
+                alert('新增分支结束');
+                $('.loading-wrapper').hide();
+              }
+            },
+          });
+        });
+      }
+    });
+
+    $('#lockButton').on('click', function () {
+      var ok = confirm('你确定要锁定已选择的分支吗?');
+      var arr = [];
+      if (ok) {
+        $('.loading-wrapper').show();
+        $('.table-tbody tr').each(function (index, item) {
+          var _this = $(item);
+          if (_this.find('input[type=checkbox]').prop('checked')) {
+            var id = _this.attr('data-id');
+            var select = _this.find('select').val();
+            var name = _this.find('select').find('option[value="' + select + '"]').attr('data-name');
+            if (!select) {
+              alert('请选择分支(请确保已获取到分支数据)');
+              throw new Error('分支数据为null:' + id);
+            }
+            arr.push({
+              id: id,
+              name: name,
+            });
+          }
+        });
+        var i = 0;
+        arr.forEach((item) => {
+          var url = LOCK_BRANCH.replace('@UUID', item.id);
+          $.ajax({
+            type: 'POST',
+            url: url,
+            data: {
+              name: item.name,
+            },
+            dataType: 'json',
+            success: function (data) {
+              $('.table-tbody tr[data-id="' + item.id + '"]').addClass('success');
+              i++;
+              if (i === arr.length) {
+                alert('锁定分支结束');
+                $('.loading-wrapper').hide();
+              }
+            },
+            error: function (response) {
+              console.error(response);
+              $('.table-tbody tr[data-id="' + item.id + '"]').addClass('error');
+              i++;
+              if (i === arr.length) {
+                alert('锁定分支结束');
+                $('.loading-wrapper').hide();
+              }
+            },
+          });
+        });
+      }
+    });
+  });
+
+  function getData() {
+    $('#form-project').hide();
+    $('#form-branch').show();
+    var keyword = document.getElementById('project').value;
+    var url = QUERY_URL.replace('@PROJECT', encodeURI(keyword || ''));
+    $.ajax({
+      type: 'GET',
+      url: url,
+      data: '',
+      dataType: 'json',
+      success: function (data) {
+        var html = '';
+        document.getElementById('total').html = '总共: ' + data.size;
+        data.values.forEach(function (item, index) {
+          var description = item.description;
+          if (description.length > 10) {
+            description = '<div class="row"><div class="col s10" data-html="' + description + '">' +
+              description.substring(0, 10) + '</div><div class="etc col s2">展开</div></div>';
+          }
+          html += '<tr data-id="' + item.uuid + '">' +
+            '        <td>' + (index + 1) + '</td>' +
+            '        <td><label class="checkbox"><input type="checkbox" class="filled-in" name="checkbox-' + item.uuid +
+            '" data-id="' + item.uuid + '" /><span></span></label></td>' +
+            '        <td width="20%">' + item.name + '</td>' +
+            '        <td width="20%"><select name="select-' + item.uuid +
+            '"></select></td>' +
+            '        <td class="last-time" width="15%">' + '' + '</td>' +
+            '        <td >' + description + '</td>' +
+            '      </tr>';
+        });
+        $('.table-tbody').html(html);
+        data.values.forEach(function (item, index) {
+          if (repoList.indexOf(item.name) >= 0) {
+            $('input[name="checkbox-' + item.uuid + '"]').prop('checked', true);
+            getAllBranch(item.uuid);
+          }
+        });
+        setTimeout(function () {
+          $('.operator-button-wrapper').show();
+        }, 1500);
+      },
+      error: function (response) {
+        console.error(response);
+      },
+    });
+  }
+
+  /**
+   * 获取全部分支
+   * @param id
+   */
+  function getAllBranch(id) {
+    var url = QUERY_BRANCH.replace('@UUID', id);
+    var forValue = $('#for').val();
+    $.ajax({
+      type: 'GET',
+      url: url,
+      dataType: 'json',
+      success: function (data) {
+        var html = '';
+        data.values.forEach((item) => {
+          if (item.type === 'branch') {
+            html += '<option value="' + item.target.hash + '" data-last="' + item.target.date + '" data-name="' +
+              item.name + '" ' + (forValue === item.name ? 'selected' : '') + '>' + item.name +
+              '</option>';
+          }
+        });
+        var _that = $('select[name="select-' + id + '"]');
+        _that.html(html);
+        $('select').formSelect();
+        var value = _that.val();
+        var lastTime = _that.find('option[value="' + value + '"]').attr('data-last');
+        _that.parents('tr').find('.last-time').html(moment(lastTime).calendar());
+      },
+    });
+  }
+
+  /**
+   * 获取全部选择的tr
+   */
+  function getAllChecked(func) {
+    $('.table-tbody tr').each(function (index, item) {
+      var _this = $(item);
+      if (!_this.find('input[type=checkbox]').prop('checked')) {
+        func();
+      }
+    });
+  }
+</script>
+</body>
+</html>
