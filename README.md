@@ -1,6 +1,8 @@
 # bitbucket-script
 批量操作bitbucket上同一个项目下多个仓库(创建分支,锁定)
 
+bitbucket API 文档 https://developer.atlassian.com/bitbucket/api/2/reference/
+
 ## 项目介绍
 实现了批量操作 bitbucket 网站中团队帐号下某个项目的多个仓库.
 
